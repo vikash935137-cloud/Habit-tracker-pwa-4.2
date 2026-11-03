@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#4f46e5">
+<title>Habit Tracker</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#f3f4f6;
+  color:#222;
+  padding:16px;
+}
+.container{
+  max-width:900px;
+  margin:auto;
+}
+header{
+  background:#4f46e5;
+  color:white;
+  padding:20px;
+  border-radius:16px;
+  text-align:center;
+}
+h1{margin:0 0 8px}
+.card{
+  background:white;
+  padding:16px;
+  margin-top:16px;
+  border-radius:14px;
+  box-shadow:0 2px 8px #0001;
+}
+input,button,select{
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-size:16px;
+}
+button{
+  background:#4f46e5;
+  color:white;
+  border:0;
+  cursor:pointer;
+}
+button.delete{background:#dc2626}
+.controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.controls input{flex:1;min-width:150px}
+.table-wrap{overflow-x:auto}
+table{
+  border-collapse:collapse;
+  width:100%;
+  min-width:700px;
+  margin-top:12px;
+}
+th,td{
+  border:1px solid #ddd;
+  padding:6px;
+  text-align:center;
+}
+th{background:#eef2ff}
+td:first-child,th:first-child{
+  position:sticky;
+  left:0;
+  background:#f8fafc;
+  min-width:140px;
+  text-align:left;
+}
+.status{
+  width:34px;
+  height:34px;
+  padding:0;
+  background:#eee;
+  color:#333;
+  font-weight:bold;
+}
+.status.done{background:#16a34a;color:white}
+.status.fail{background:#ef4444;color:white}
+.progress-bg{
+  height:18px;
+  background:#e5e7eb;
+  border-radius:20px;
+  overflow:hidden;
+}
+.progress-fill{
+  height:100%;
+  background:#16a34a;
+  width:0%;
+  transition:width .3s;
+}
+.small{color:#666;font-size:14px}
+</style>
+</head>
+
+<body>
+<div class="container">
+<header>
+  <h1>📅 Habit Tracker</h1>
+  <p>Apni daily habits ko track karo</p>
+</header>
+
+<div class="card">
+  <div class="controls">
+    <select id="month"></select>
+    <input id="habitInput" placeholder="Nayi habit likho">
+    <button onclick="addHabit()">+ Add Habit</button>
+  </div>
+  <p class="small">Cell par tap karo: ✓ Complete, × Missed, phir blank.</p>
+</div>
+
+<div class="card">
+  <h3>Monthly Tracker</h3>
+  <div class="table-wrap">
+    <table id="tracker"></table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Progress</h3>
+  <p id="progressText">0% Complete</p>
+  <div class="progress-bg">
+    <div class="progress-fill" id="progress"></div>
+  </div>
+  <p class="small">Progress mein sirf ✓ complete habits count hongi.</p>
+</div>
+</div>
+
+<script>
+const monthSelect=document.getElementById("month");
+const tracker=document.getElementById("tracker");
+const habitInput=document.getElementById("habitInput");
+const progress=document.getElementById("progress");
+const progressText=document.getElementById("progressText");
+
+let habits=JSON.parse(localStorage.getItem("habits")||"[]");
+let records=JSON.parse(localStorage.getItem("records")||"{}");
+
+const now=new Date();
+for(let i=0;i<12;i++){
+  let d=new Date(now.getFullYear(),i,1);
+  let option=document.createElement("option");
+  option.value=d.getFullYear()+"-"+String(i+1).padStart(2,"0");
+  option.textContent=d.toLocaleString("en",{month:"long"})+" "+d.getFullYear();
+  monthSelect.appendChild(option);
+}
+monthSelect.value=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+
+function save(){
+  localStorage.setItem("habits",JSON.stringify(habits));
+  localStorage.setItem("records",JSON.stringify(records));
+}
+
+function key(month,habit,day){
+  return month+"|"+habit+"|"+day;
+}
+
+function addHabit(){
+  let name=habitInput.value.trim();
+  if(!name)return alert("Habit ka naam likho");
+  if(habits.includes(name))return alert("Ye habit pehle se hai");
+  habits.push(name);
+  habitInput.value="";
+  save();
+  render();
+}
+
+function deleteHabit(name){
+  if(!confirm("Habit delete karein?"))return;
+  habits=habits.filter(h=>h!==name);
+  save();
+  render();
+}
+
+function toggle(month,habit,day){
+  let k=key(month,habit,day);
+  let current=records[k]||"";
+  records[k]=current===""?"✓":current==="✓"?"×":"";
+  save();
+  render();
+}
+
+function render(){
+  const month=monthSelect.value;
+  const [year,mon]=month.split("-").map(Number);
+  const days=new Date(year,mon,0).getDate();
+
+  let html="<thead><tr><th>Habit</th>";
+  for(let d=1;d<=days;d++)html+="<th>"+d+"</th>";
+  html+="<th>✓ Total</th><th>Delete</th></tr></thead><tbody>";
+
+  habits.forEach(habit=>{
+    let total=0;
+    html+="<tr><td>"+escapeHTML(habit)+"</td>";
+    for(let d=1;d<=days;d++){
+      let value=records[key(month,habit,d)]||"";
+      if(value==="✓")total++;
+      let cls=value==="✓"?"done":value==="×"?"fail":"";
+      html+='<td><button class="status '+cls+'" onclick="toggle(\''+
+        month+'\',\''+escapeJS(habit)+'\','+d+')">'+value+'</button></td>';
+    }
+    html+="<td>"+total+"</td>";
+    html+='<td><button class="delete" onclick="deleteHabit(\''+
+      escapeJS(habit)+'\')">×</button></td></tr>';
+  });
+
+  html+="</tbody>";
+  tracker.innerHTML=html;
+  updateProgress(month,days);
+}
+
+function updateProgress(month,days){
+  let possible=habits.length*days;
+  let completed=0;
+  habits.forEach(habit=>{
+    for(let d=1;d<=days;d++){
+      if(records[key(month,habit,d)]==="✓")completed++;
+    }
+  });
+  let percent=possible?Math.round(completed/possible*100):0;
+  progress.style.width=percent+"%";
+  progressText.textContent=percent+"% Complete ("+completed+"/"+possible+")";
+}
+
+function escapeHTML(text){
+  return text.replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+function escapeJS(text){
+  return text.replaceAll("\\","\\\\").replaceAll("'","\\'");
+}
+
+monthSelect.addEventListener("change",render);
+render();
+</script>
+</body>
+</html>
